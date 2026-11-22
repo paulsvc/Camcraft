@@ -330,7 +330,8 @@ with `gh`. `ROADMAP.md` and `DONE.md` are retired; read them only for history
   --delete-branch`; a fork PR without `--delete-branch`). Never squash or
   rebase. Never merge a draft.
   - A `fix` / `perf` / `refactor` PR merges when its independent review is
-    clean and its quick gate is green.
+    clean and its quick gate is green. No merge waits for a heavy lane run
+    ("Heavy lanes at review").
   - A docs-, process- or CI-only PR merges when it is reviewed.
   - A `feat` or breaking PR merges at the minor/major cut.
   - Nothing merges while a cut is between its step 1 and its tag.
@@ -343,7 +344,9 @@ with `gh`. `ROADMAP.md` and `DONE.md` are retired; read them only for history
     quick pass is good. The quick pass reads the PR and does not build. It
     confirms: the PR merges cleanly with `main`; the author's quick gate is
     green on the final head, with the pinning tests named; the body is
-    complete; the PR obeys this file.
+    complete; the PR obeys this file. A heavy lane result is not a
+    condition, except the one targeted heavy step of a `P1` PR under the
+    safety floor ("Heavy lanes at review").
   - The full independent review comes after that, on the ready PR.
   - A ready PR takes no more pushes. For any change, first make it a draft
     again (`gh pr ready <M> --undo`), say why in a PR comment, push, gate
@@ -624,52 +627,43 @@ tests are in `crates/ui/tests/`; they start the real app through
   of the heavy tests, in release, at review and merge time. A light twin is
   next to its full test, on a smaller fixture or a reduced set. The full
   test keeps its golden asserts and its pinned readings. A red light run is
-  a note on the PR: the author runs the full heavy steps locally, and they
-  must pass before the cut gate starts again. A local run never replaces
-  the cut gate.
+  a note on the PR. It does not block the PR by itself ("Heavy lanes at
+  review"). The full heavy steps of the red twins run at the cut, in the
+  cut gate. A local run never replaces the cut gate.
   - A twin has the ignore reason `light lane: ...` and the name
     `<full test>_light`. The gate refuses a twin whose file has no
     `#[ignore]`d full test.
   - A red light run prints the note: each red step, with the command of
     its full heavy step (`cargo xtask gate release --only "<crate> heavy:
     <target>"`).
-- **Heavy lanes at review** (#2568). `cargo xtask gate heavy [--base main]`
-  maps the diff to the heavy lanes that it reaches and runs them in release
-  with `--ignored`. The reach follows the dependencies between our crates: a
-  change in `motion` reaches the `app` heavy lanes.
-  - A PR whose diff reaches a heavy lane does not merge while a reached
-    heavy test is red or not run on its final head. Two forms give that
-    result.
-  - The PR form: the author runs the command on the final head before the
-    PR is flagged ready. The PR body names the lanes that ran. A PR that
-    merges alone (wave 2, or a batch of one) uses this form. A `SAME` or
-    `MECHANICAL` refresh keeps the heavy result of the PR. A `DELTA` or
-    `NEW CODE` refresh needs a new result: its own run, or a wave record
-    that names the new head.
-  - The wave form (#3460): the merging session runs the command one time
-    on the trial tree of a planner wave. The trial tree is the current
-    `main` with each PR of the wave merged. `--covers <PR>:<head sha>`
-    names each PR head, and the tool refuses a head that is not in the
-    tree. One fixed comment on each PR of the wave records the result:
-    `<!-- heavy-wave: <tree hash> -->`, the base, the heads, the lanes and
-    the counts. A red step is attributed to one PR. That PR leaves the
-    wave, and the run starts again for the other PRs. If `main` moves
-    before the merges, the planner runs again. A PR whose trial merge is
-    no longer clean leaves the wave.
-  - A wave record covers a PR only for the head that it names. A PR that
-    gets a new commit after the run is not covered. A safety-floor PR is
-    covered only if the trial tree contains its final head.
-  - The review comment lists the heavy lanes that ran and their results.
-    "Not run" is never a pass. A reviewer accepts a wave record only if it
-    names the current head of the PR.
-  - **Owed heavy result** (#3467). A review of a `P3` or lower PR can set
-    `merge-ready` while no heavy result covers its head. The review
-    comment then says "not run - owed to the wave run before merge" and
-    names the owed lanes. The merge of that PR waits for a green run that
-    covers its final head: a wave record, or its own run. The merging
-    session does not merge the PR until a record names that head.
-  - A `P1` or `P2` PR keeps the strict rule. Its heavy result on the head
-    comes before the label `merge-ready`.
+- **Heavy lanes at review** (#2568, #3556). A review runs small targeted
+  tests. It does not run the full heavy lanes.
+  - At review a PR needs these results on its final head, and no more:
+    - its own pinning tests;
+    - the touched test binaries (the quick plan, `cargo xtask gate quick`);
+    - the example catalog suites by name (`example_catalog*` of
+      `camcraft-app`), where a post or a toolpath changed;
+    - the light lane (`cargo xtask gate light`, **The light lane**).
+  - No PR gets the full heavy lanes. A diff that reaches a heavy lane is
+    not "not ready" for that reason. No PR is "owed heavy".
+  - The full heavy lanes run only at the cut, in the cut gate on the cut
+    runner.
+  - A `P1` PR under the safety floor (wrong output) gets one targeted heavy
+    step: the named heavy tests of the changed code. Run the step of the
+    binary that holds them: `cargo xtask gate heavy --only "<crate> heavy:
+    <target>"`. It never gets the whole lane. The author runs it on the
+    final head before the PR is flagged ready, and the PR body names it. A
+    `P2` or lower PR gets no heavy step.
+  - `cargo xtask gate heavy [--base main]` maps the diff to the heavy lanes
+    that it reaches, and `--dry-run` prints the reach. The reach follows the
+    dependencies between our crates: a change in `motion` reaches the `app`
+    heavy lanes. The command and its wave form (#3460: `--covers <PR>:<head
+    sha>` and the `<!-- heavy-wave: <tree hash> -->` record) stay as tools.
+    They are not a condition for "ready" or for a merge.
+  - The review comment lists the steps that ran and their results. "Not
+    run" is never a pass for a step that this rule requires.
+  - **Owed heavy result** (#3467) is retired (#3556). A review never writes
+    "owed to the wave run", and no merge waits for a heavy record.
   - The release tier at the cut stays the final check: the tagged tree is
     exactly the gated tree.
 - **Test the change, not everything.** The tests that pin a fix prove it.
