@@ -130,7 +130,7 @@ pub fn current_stamp(
         }
     }
     params.stamp_with(world, setup, Some(src), &mut h);
-    if let OpParams::Deburr { exclude_edges, .. } = params {
+    if let OpParams::Deburr { exclude_edges, .. } | OpParams::MultiAxisDeburr { exclude_edges, .. } = params {
         super::deburr_picks::stamp_inputs(world, setup, src, exclude_edges, &mut h)?;
     }
     // #2848: a rotary op's picks named the whole model before. A path
@@ -139,6 +139,12 @@ pub fn current_stamp(
         && matches!(params, OpParams::RotaryContour { .. } | OpParams::RotaryParallel { .. } | OpParams::RotaryOffset { .. })
     {
         h.write(b"rotary-picked-faces-v1");
+    }
+    // #3452: a part-off cached before the kerf moved to the chuck side of
+    // the end face cut half a blade into the part. Such a path is stale
+    // until the op is generated again (and judged by the kerf law).
+    if matches!(params, OpParams::Part { .. }) {
+        h.write(b"part-off-kerf-side-v1");
     }
     // #326: the setup's part alignment is a moved input for every op of
     // the setup (the parts it machines, verifies against or measures

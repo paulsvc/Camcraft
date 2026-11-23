@@ -207,6 +207,13 @@ pub const ROWS: &[Row] = &[
         mesh: "watertight, within tolerance",
     },
     Row {
+        file: "hole_on_pocket_wall.step",
+        mm_per_unit: 1.0,
+        truck: Truck::NotRecorded,
+        import: "no truck reading; unit agrees",
+        mesh: "off: area",
+    },
+    Row {
         file: "lathe_holder_offset.step",
         mm_per_unit: 1.0,
         truck: read(1, 50200.0, 10740.0, [-21.0, 12.0, -7.0], [4.0, 130.0, 13.0], 0, 0.005),

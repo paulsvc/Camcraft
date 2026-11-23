@@ -97,6 +97,7 @@ fn adaptive(method: AdaptiveMethod, top: f64) -> OpParams {
 
 fn adaptive_with(method: AdaptiveMethod, top: f64, troch: AdaptiveTrochParams) -> OpParams {
     OpParams::Adaptive2D {
+        rest: None,
         blend_radius: None,
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
@@ -117,6 +118,7 @@ fn adaptive_with(method: AdaptiveMethod, top: f64, troch: AdaptiveTrochParams) -
         method,
         troch,
         corner_relief: Default::default(),
+        pass_start: Default::default(),
     }
 }
 

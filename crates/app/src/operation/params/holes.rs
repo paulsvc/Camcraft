@@ -106,12 +106,19 @@ impl OpParams {
                 tolerance,
                 holes,
                 break_through,
+                pass_start,
             } => {
                 // #1557: the break-through, written only when stated,
                 // so every older op keeps the digest it was cached under.
                 if let Some(b) = break_through {
                     h.write_u8(0xB7);
                     w(h, *b);
+                }
+                // #3360: written only off Auto, the #3316 bytes.
+                match pass_start {
+                    crate::machining2d::PassStart::Auto => {}
+                    crate::machining2d::PassStart::Inside => h.write_u8(0xC1),
+                    crate::machining2d::PassStart::Outside => h.write_u8(0xC2),
                 }
                 wh(h, *clearance_z);
                 wh(h, *top_z);

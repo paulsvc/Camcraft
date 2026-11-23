@@ -171,6 +171,7 @@ include!("example_catalog/case_2d_slots.rs");
 
 // #2856: the refusal case 2d/drill-overfeed and its two case tests.
 include!("example_catalog/case_2d_drill_overfeed.rs");
+include!("example_catalog/case_3d_rough_finish.rs"); // #2866: 3d/rough-finish
 
 mod catalog_turning_bushing {
     use super::*;
@@ -307,8 +308,12 @@ fn turning_cone_thread_case_posts_the_taper_and_the_thread() {
     assert!(!program.contains("G76"), "this case posts G32 passes, not the G76 cycle");
 
     // The neck and the part-off: the 3 mm blade, to X8 and to the axis.
+    // The part-off plane is Z15, the end face of the part. The whole 3 mm
+    // kerf is on the bar side (Z12 to Z15), so the orientation 2 blade
+    // posts its low edge at Z12 (#3452).
     assert!(section(&program, "Neck").contains(&"G01 X8. Z60. F0.02"), "the neck is 8 mm at Z60");
-    assert!(section(&program, "Part off").iter().any(|l| l.starts_with("G01 X0. Z13.5")), "the part-off reaches the axis");
+    assert!(section(&program, "Part off").contains(&"G01 X0. Z12. F0.02"),
+        "the part-off reaches the axis at the low edge Z12, its kerf Z12..15 below the part (#3452)");
 }
 
 /// The G word and the Z word of each motion block of a posted program.

@@ -102,6 +102,7 @@ fn part() -> Mesh {
 fn bore() -> OpParams {
     OpParams::Bore {
         break_through: None,
+        pass_start: camcraft_app::machining2d::PassStart::Auto,
         links: camcraft_app::links::Links::PLANAR,
         clearance_z: Height::fixed(40.0),
         retract_z: None,

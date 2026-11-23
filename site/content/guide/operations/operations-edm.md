@@ -15,8 +15,10 @@ Blue shows the operation travel; dashed orange shows approach and retract; gray 
 
 **A wire EDM machine.** Wire Contour needs a setup whose machine file
 declares the kind `wire_edm`. The library includes **Sodick ALC400G**;
-its travel and taper limit are stated, but conditions, wire diameter,
-guide heights and EDM codes must come from your machine's documentation.
+its travel and taper limit are stated. It also ships an example starter
+set: three conditions, guide heights and automatic threading (see
+**Conditions** below). The examples let a first Wire Contour generate and
+post. They are not Sodick figures: replace them before you cut.
 For another machine, supply a file with its own data (the keys are in
 [Machine types](@/guide/check-and-post/machines.md)). The **Wire EDM** ribbon group
 shows only when such a machine is mounted. On any other machine the
@@ -33,9 +35,26 @@ condition; leave the tool empty (it names '...')").
 
 **Conditions.** The machine file lists its conditions under
 `edm.conditions`, each with an `id` and, for a wire cut, a `gap` (per
-side) and a `wire_diameter`, taken from your machine's manual. No conditions ship.
+side) and a `wire_diameter`, taken from your machine's manual.
 CamCraft reads only those two numbers; power and flushing stay with the
 control, which picks them by the condition's id.
+
+The **Sodick ALC400G** file ships three example conditions for a
+0.25 mm wire: `C110` (rough, gap 0.04 mm), `C120` (skim, gap 0.02 mm)
+and `C130` (finish, gap 0.01 mm). Each has the note "EXAMPLE - not a
+Sodick figure". The file also states example guide heights
+(`edm.lower_guide_z` 0, `edm.upper_guide_z` 130 mm) and `edm.awt: true`,
+so the Sodick post writes T91 / T90. To replace the examples:
+
+1. Copy `sodick-alc400g.mch` and give the copy your own model name.
+2. In `edm.conditions`, write one row for each condition of your
+   control's table: its C number as `id`, its spark gap per side as
+   `gap`, and its wire as `wire_diameter`.
+3. Delete the example rows that your table does not have.
+4. Set `edm.lower_guide_z` and `edm.upper_guide_z` to your guide heights.
+   Set `edm.awt` to `false` if your machine has no automatic threader.
+5. Mount the copy on the setup. An operation that names a removed
+   example id is refused by name.
 
 **Posting and checks.** The built-in **Generic ISO Wire EDM** and **Sodick
 Wire EDM (Mark 21)** posts serve wire machines. A user `.cps` post can declare
@@ -83,6 +102,7 @@ how far the threading point and run-out stand beyond the stock.
 | Geometry | Side | Die - the wire runs inside the profile; or Punch - the wire runs outside the profile |
 | Geometry | Start hole stated | off |
 | Geometry | Start hole X / Start hole Y | 0 / 0 when first ticked |
+| Geometry | Sharp inside corners at the wire radius | off by default |
 | Geometry | Taper angle | 0 degrees (vertical) |
 | Geometry | 4-axis (upper and lower profiles) | off |
 | Heights | Top of workpiece | model top |
@@ -160,10 +180,17 @@ the deepest reading at any height, so you can see whether the model's
 tolerance explains it. The value must be below the kerf offset and at
 most 0.25 mm.
 
-**Inside corners.** No inside corner can be cut tighter than the kerf
-offset. A corner, slot or neck the wire cannot reach is refused by name,
-never rounded for you; round it in the model or cut with a thinner wire
-(another condition).
+**Inside corners.** On **Geometry**, **Sharp inside corners at the wire
+radius** is off by default: a corner, slot or neck that the kerf cannot
+reach is refused. Turn it on only when the wire's own corner radius is
+acceptable. The path keeps wire radius + spark gap at a sharp inside
+corner, and its notes state the worst uncut rest and its location.
+For example, a 0.25 mm wire with a 0.02 mm spark gap leaves a 0.145 mm
+corner radius. The allowance admits sharp corners of 60 degrees or more;
+it does not admit arbitrary narrow slots or acute corners. A refusal
+saying "even with sharp inside corners stated" means the leftover
+exceeds that wire radius + gap. Open the corner to at least 60 degrees,
+round it in the model, or choose a thinner-wire condition.
 
 ## Wire Contour refusals
 

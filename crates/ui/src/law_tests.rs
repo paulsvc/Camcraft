@@ -1451,7 +1451,7 @@ mod height_plane_tests {
     }
 
     fn pocket() -> OpParams {
-        OpParams::Pocket { rest: None, tilt: None, blend_radius: None,
+        OpParams::Pocket { pass_start: Default::default(), rest: None, tilt: None, blend_radius: None,
             links: camcraft_app::links::Links::PLANAR,
             stepover: 3.0,
             stock_to_leave: 0.0,

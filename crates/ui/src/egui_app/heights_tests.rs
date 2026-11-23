@@ -19,7 +19,7 @@ use camcraft_app::tools::catalog;
 use crate::state::{CommandKind, State};
 
 fn pocket(clearance_z: Height, top_z: Height, bottom_z: Height) -> OpParams {
-    OpParams::Pocket { rest: None,
+    OpParams::Pocket { pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         tilt: None,
@@ -337,3 +337,6 @@ fn tilted_height_labels_show_local_axis_distance() {
 
 #[path = "heights_note_tests.rs"]
 mod notes;
+
+#[path = "retract_link_tests.rs"]
+mod retract_links;

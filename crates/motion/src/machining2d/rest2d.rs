@@ -286,7 +286,7 @@ pub(super) fn emit_rest(
     let off = p.tool_diameter * 0.5 + p.stock_to_leave;
     if !plan.previous_fits {
         let cr = plan_corner_reliefs(region, &plan.center, off, relief)?;
-        return pocket_over_with_relief(region, &plan.center, p, notes, true, &[], &cr.reliefs);
+        return pocket_over_with_relief(region, &plan.center, p, notes, true, &[], &cr.reliefs, &super::StartSide::default());
     }
     let corner_reliefs: Vec<ResolvedRelief> = if relief.is_off() {
         Vec::new()
@@ -326,6 +326,8 @@ pub(super) fn emit_rest(
             hold_crossings: true,
             holes: &[],
             corner_reliefs: &corner_reliefs,
+            cleared_links: false,
+            ramp_starts: Vec::new(),
         },
     )
 }

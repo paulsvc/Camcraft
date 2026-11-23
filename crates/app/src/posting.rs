@@ -28,6 +28,9 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
 
+#[path = "posting_agie.rs"]
+pub mod agie;
+
 #[path = "posting_files.rs"]
 mod files;
 pub use files::{
@@ -54,9 +57,11 @@ pub const PLASMA_POSTS: &[&str] = &["Tormach PathPilot Plasma"];
 
 /// The registry entries that speak WIRE EDM (#533): RS-274 motion with
 /// the control's own codes from the machine file, and (#617) the Sodick
-/// dialect with its manual's words. They serve wire EDMs only, and no
-/// cutting post serves one. The first is the default for a wire EDM.
-pub const WIRE_POSTS: &[&str] = &["Generic ISO Wire EDM", "Sodick Wire EDM (Mark 21)"];
+/// dialect with its manual's words, and (#2700) the G-EDM dialect for
+/// G-RBLv3 controllers. They serve wire EDMs only, and no cutting post
+/// serves one. The first is the default for a wire EDM.
+pub const WIRE_POSTS: &[&str] =
+    &["Generic ISO Wire EDM", "Sodick Wire EDM (Mark 21)", agie::POST, "G-EDM Wire EDM"];
 
 /// The registry entries that speak SINKER EDM (#542): RS-274 motion
 /// with the control's own codes from the machine file, each declaring
@@ -306,7 +311,7 @@ pub fn script_of(post: &PostRef) -> Result<(String, String), String> {
         }
         PostRef::Named(name) => Ok((format!("{name} (built-in)"), builtin_post_text(&name)?.to_owned())),
         PostRef::File(path) => {
-            let text = std::fs::read_to_string(&path)
+            let text = crate::session_files::read_post(&path)
                 .map_err(|e| format!("post script {path}: {e}"))?;
             Ok((path, text))
         }
@@ -316,6 +321,10 @@ pub fn script_of(post: &PostRef) -> Result<(String, String), String> {
 /// What a successful post says back.
 #[derive(Debug)]
 pub struct Posted {
+    /// The controller files published together for a native multi-file post.
+    pub bundle_files: Vec<std::path::PathBuf>,
+    /// Required checks on the posted native job before the controller generates its steps.
+    pub controller_review: Option<String>,
     pub ops: usize,
     pub lines: usize,
     /// The exact program that was written - the M1.7d viewer shows the
@@ -433,6 +442,7 @@ pub(crate) fn json_map_to_overrides(val: &Value) -> Result<BTreeMap<String, Opti
 
 /// Resolve a built-in post name or `.cps` file path to its [`PostRef`] and script text (#258, #2190).
 pub fn resolve_cps(cps: &str) -> Result<(PostRef, String), String> {
+    let cps = agie::current_name(cps);
     if BUILTINS.iter().any(|(n, _)| *n == cps) {
         return Ok((PostRef::Named(cps.to_owned()), builtin_post_text(cps)?.to_owned()));
     }
@@ -440,7 +450,7 @@ pub fn resolve_cps(cps: &str) -> Result<(PostRef, String), String> {
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("cps"))
     {
-        let text = std::fs::read_to_string(cps)
+        let text = crate::session_files::read_post(cps)
             .map_err(|e| format!("cannot read post script {cps}: {e}"))?;
         return Ok((PostRef::File(cps.to_owned()), text));
     }
@@ -608,6 +618,9 @@ fn post_script_as(
     extra: Option<&BTreeMap<String, OptionValue>>,
 ) -> Result<Posted, String> {
     let started = crate::clock::Instant::now();
+    if post.is_some_and(agie::is_native) {
+        return agie::post(world, out_path, extra);
+    }
     let posted = post_script_body_with(world, cps, label, post, extra)
         .and_then(|p| write_program(out_path, p));
     match &posted {
@@ -631,6 +644,9 @@ fn post_script_as(
 /// one-file post refuses it.
 pub fn post_setup_unwritten(world: &World) -> Result<Posted, String> {
     let post = mounts::single(world, true)?.post;
+    if agie::is_native(&post) {
+        return Err("Native wire EDM jobs require a job directory on the desktop or CLI".into());
+    }
     let (label, cps) = script_of(&post)?;
     let posted = post_script_body_with(world, &cps, Some(&label), Some(&post), None);
     match &posted {
@@ -714,6 +730,8 @@ fn post_script_body_with(
     let lines = out.program.lines().count();
     let line_pos = viewer_map(&records, &out);
     Ok(Posted {
+        bundle_files: Vec::new(),
+        controller_review: None,
         ops,
         lines,
         program: out.program,
@@ -1363,6 +1381,7 @@ impl HeightRefs for OpParams {
         match self {
             OpParams::Probe { clearance_z, .. } => vec![clearance_z],
             OpParams::PlasmaProfile(p) => vec![&p.clearance_z, &p.top_z, &p.bottom_z],
+            OpParams::WaterjetProfile(p) => vec![&p.clearance_z, &p.top_z, &p.bottom_z],
             OpParams::WireContour(p) => vec![&p.top_z, &p.bottom_z],
             OpParams::SinkerBurn(p) | OpParams::SinkerSideBurn(crate::operation::SinkerSideBurnOp { burn: p, .. }) => vec![&p.clearance_z, &p.top_z, &p.floor_z],
             OpParams::SlotUndercut(p) => {
@@ -1564,6 +1583,12 @@ impl HeightRefs for OpParams {
             // between runs itself, and the window's two planes clip
             // the loci (M2.5 E B).
             OpParams::Deburr {
+                clearance_z,
+                top_z,
+                bottom_z,
+                ..
+            }
+            | OpParams::MultiAxisDeburr {
                 clearance_z,
                 top_z,
                 bottom_z,

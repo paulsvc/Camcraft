@@ -4,6 +4,8 @@
 
 mod common;
 mod do_not_touch_support;
+#[path = "do_not_touch/trace.rs"]
+mod trace;
 
 use camcraft_app::commands::SetOperationDoNotTouch;
 use camcraft_app::verify::{FixturePart, Warning};
@@ -227,7 +229,10 @@ fn pocket3d_do_not_touch_keeps_clear_raises_links_and_blocks_impossible_cut() {
         "operation": pocket_op,
         "picks": [{ "model": "tower", "id": tower_top_face }]
     }));
-    assert!(unsup.contains("2D Offset") && unsup.contains("3D Pocket"), "unsupported msg: {unsup}");
+    assert!(
+        unsup.contains("2D Offset") && unsup.contains("3D Pocket") && unsup.contains("Engrave"),
+        "unsupported msg: {unsup}"
+    );
 
     let op2 = c.ok("add_operation", json!({ "kind": "2D Offset", "tool": "SteppedMill" }))["operation"]
         .as_str()

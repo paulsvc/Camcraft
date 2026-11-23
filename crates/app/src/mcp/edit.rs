@@ -62,6 +62,17 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
     let Some((key, Value::Object(mut fields))) = tagged.into_iter().next() else {
         return Err("the operation's parameters could not be read".into());
     };
+    if patch.contains_key("pass_start") {
+        let reason = match base {
+            OpParams::Face { .. } => Some("Face has no pass order: its rows run edge to edge across the face, so there is no inside or outside to start from"),
+            OpParams::Slot { .. } => Some("Slot has no pass order. Each depth has one continuous pass. A tool-width cut follows the centerline. A wider cut connects rows."),
+            OpParams::TrochoidalSlot { .. } => Some(operation::TROCHOIDAL_SLOT_NO_PASS_ORDER),
+            _ => None,
+        };
+        if let Some(reason) = reason {
+            return Err(format!("bad params patch: pass_start - {reason}"));
+        }
+    }
     for (k, v) in patch {
         merge(fields.entry(k.clone()).or_insert(Value::Null), v);
         if v.is_null() {
@@ -96,6 +107,9 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
         if *v == Value::Bool(false) && !back.contains_key(k) && flag_kept(&key, &fields_of(base), k) {
             back.insert(k.clone(), Value::Bool(false));
         } else if k == "corner_relief" && !back.contains_key(k) && corner_relief_kept(&key, &fields_of(base)) {
+            back.insert(k.clone(), v.clone());
+        } else if k == "pass_start" && *v == json!("auto") && !back.contains_key(k) && pass_start_kept(&key, &fields_of(base)) {
+            // #3316: `auto` is never written, so it never comes back.
             back.insert(k.clone(), v.clone());
         }
     }
@@ -153,6 +167,18 @@ fn corner_relief_kept(key: &str, fields: &Map<String, Value>) -> bool {
     tagged.insert(key.to_owned(), Value::Object(probe));
     project::params_from_json(&Value::Object(tagged))
         .map(|p| fields_of(&p).contains_key("corner_relief"))
+        .unwrap_or(false)
+}
+
+/// True when the kind `key` has the `pass_start` field (#3316): a value
+/// off `auto` survives the typed round-trip.
+fn pass_start_kept(key: &str, fields: &Map<String, Value>) -> bool {
+    let mut probe = fields.clone();
+    probe.insert("pass_start".into(), json!("outside"));
+    let mut tagged = Map::new();
+    tagged.insert(key.to_owned(), Value::Object(probe));
+    project::params_from_json(&Value::Object(tagged))
+        .map(|p| fields_of(&p).contains_key("pass_start"))
         .unwrap_or(false)
 }
 
@@ -274,6 +300,7 @@ pub(super) fn add_operation(env: &mut Env, a: &Map<String, Value>) -> Result<Val
     // The seed helix follows the tool, as the app's quick-add does.
     if let Some(t) = model::find_by_name(&env.world, tool).and_then(|e| model::tool_of(&env.world, &e)) {
         operation::seed_helix_for_tool(&mut params, t.diameter);
+        operation::seed_slot_for_tool(&mut params, t.diameter);
         // #890: the feed from the tool's row for the document material;
         // an explicit params patch below still wins.
         crate::cutting_rows::seed_feed_for_tool(&env.world, &mut params, &t);

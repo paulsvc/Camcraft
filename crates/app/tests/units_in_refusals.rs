@@ -334,6 +334,7 @@ fn disc_world(mesh: Mesh, c: Point2) -> (World, History) {
 
 fn circular(bottom: f64) -> OpParams {
     OpParams::Circular {
+        pass_start: Default::default(),
         links: camcraft_app::links::Links::PLANAR,
         center: Point2::new(-3.0, 7.0),
         radius: 12.0,
@@ -490,7 +491,7 @@ fn picks_of(world: &World, name: &str, fits: impl Fn(f64, f64, f64, f64) -> bool
 }
 
 fn pocket(top: f64, bottom: f64) -> OpParams {
-    OpParams::Pocket { rest: None,
+    OpParams::Pocket { pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         stepover: 4.0,

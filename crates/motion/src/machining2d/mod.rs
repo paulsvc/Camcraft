@@ -49,6 +49,7 @@ mod contour_auto;
 mod contour_bore;
 mod contour_chain;
 mod contour_comp;
+mod contour_comp_pick;
 mod contour_comp_room;
 mod contour_depth;
 mod contour_entry;
@@ -69,6 +70,7 @@ mod equal_steps;
 mod face;
 mod face_entry;
 mod face_holes;
+mod face_keep;
 mod fillet;
 mod gen_error;
 mod ghost;
@@ -78,24 +80,32 @@ mod lead_ext;
 mod lead_fit;
 mod lead_seam;
 mod ladder_links;
+mod level_order;
+mod level_ramp_entry;
+mod level_rings;
 mod levels;
 mod microlift;
+mod pass_start;
 mod pocket;
+mod pocket_plan;
 mod pocket_emit;
 mod pocket_zigzag;
 mod pocket_hsm;
+mod pocket_hsm_start;
 mod pocket_strategy;
 mod pocket_troch;
 mod predrilled;
 mod adaptive;
 mod adaptive_method;
 mod adaptive_troch;
+mod adaptive_avoid;
 mod adaptive_troch_clean;
 mod adaptive_troch_lanes;
 mod adaptive_troch_level;
 mod adaptive_troch_slice;
 mod rest2d;
 mod rest_prior;
+mod rest_prior_adaptive;
 mod rest_anchor;
 mod rest_rings;
 mod chord_clear;
@@ -104,6 +114,8 @@ mod tab_bridge;
 mod tab_clear;
 mod tab_kerf;
 mod slots;
+mod slot_band;
+mod trace_avoid;
 mod slot_ends;
 mod slot_lap;
 mod slot_room;
@@ -134,7 +146,7 @@ mod thread_pass_tests;
 
 pub use arcs::{fit_arcs, fit_arcs_sided, Seg, ARC_FIT_TOL};
 pub use blend::MIN_BLEND_RADIUS;
-pub use bore::{bore, BoreHole, BoreParams};
+pub use bore::{bore, bore_started, BoreHole, BoreParams};
 pub use bore_core::{bore_core_gap, bore_floor_reach, bore_leaves_core, cutting_radius_at, max_bore_diameter};
 pub use chamfer::{chamfer, ChamferParams};
 pub use chamfer_ride::{ride_loops as chamfer_ride_loops, wall_lean as chamfer_wall_lean};
@@ -148,7 +160,7 @@ pub use contour_run_stock::contour_open_run_sided;
 pub use contour_link::DEFAULT_LEVEL_RAMP_ANGLE;
 pub use crate::links::{Link, Links};
 pub use equal_steps::{cut_levels_for, equal_stepdown, ladder_stepdown};
-pub use face::{face, face_led, face_over, FaceParams, GenError, MAX_PASSES};
+pub use face::{face, face_led, face_over, face_over_kept, FaceKeep, FaceParams, GenError, MAX_PASSES};
 pub use face_holes::FaceHoles;
 pub use ghost::Ghost;
 pub use face_entry::{air_lead, AIR_MARGIN};
@@ -160,8 +172,12 @@ pub use corner_relief::{
     InsideCorner, ResolvedRelief, TBoneDirection, capsule_region, inside_corners, plan_corner_reliefs,
 };
 pub use corner_relief_spur::pocket_relief_plan;
-pub use pocket::{pocket, pocket_entered, pocket_entered_with_relief, PocketParams, PocketStrategy};
-pub use pocket_avoid::{pocket_avoid, pocket_avoid_with_relief};
+pub use level_rings::level_ring_plan;
+pub use pass_start::{PASS_START_NOTE, PASS_START_REST_NOTE, PASS_START_ZIGZAG_NOTE, PassStart, StartSide, pass_start_fallbacks};
+pub use pocket::{
+    pocket, pocket_entered, pocket_entered_with_relief, pocket_started, pocket_started_on, PocketParams, PocketStrategy,
+};
+pub use pocket_avoid::{pocket_avoid, pocket_avoid_started, pocket_avoid_started_on, pocket_avoid_with_relief};
 pub use predrilled::PreHole;
 pub use rest2d::{
     rest_plan, rest_pocket, rest_pocket_with_relief, rest_strategy, RestParams, RestPlan, RestSource, REST_FILM,
@@ -170,16 +186,21 @@ pub use rest2d::{
 pub use rest_prior::{
     rest_plan_stock, rest_pocket_previous, rest_pocket_previous_with_relief, rest_stock_from_columns, PRIOR_Z_TOL,
 };
+pub use rest_prior_adaptive::{rest_adaptive_previous, REST_ADAPTIVE_ENTERED, REST_ADAPTIVE_NO_STOCK};
 pub use ring::{on_boundary, ring_is_circular};
+pub use slot_band::slot_centre_band;
 pub use slots::{chord_clears, slot, trace, SlotParams, TraceParams};
+pub use trace_avoid::trace_avoid;
 pub use slot_ends::extended_ends as slot_extended_ends;
 pub use slot_room::{SlotBound, SlotFit, FIT_TOL as SLOT_FIT_TOL};
 pub use undercut::{undercut, undercut_band, undercut_station, UndercutParams, MAX_BULGE as UNDERCUT_MAX_BULGE};
 pub use vcarve::{v_carve, VCarveParams};
 pub use unreached::{unreached_corner_note, unreached_corners, unreached_note, unreached_pieces};
-pub use adaptive::{rest_adaptive, RestStock, StockFloor, REST_STOCK_FILM};
+pub use adaptive::{rest_adaptive, rest_levels, RestStock, StockFloor, REST_STOCK_FILM};
 pub use adaptive_method::AdaptiveMethod;
+pub use pocket_hsm_start::trochoidal_pass_start_refusal;
 pub use adaptive_troch::{AdaptiveTrochParams, adaptive_trochoidal, adaptive_trochoidal_with};
+pub use adaptive_avoid::{adaptive_spiral_avoid, adaptive_spiral_avoid_on, adaptive_trochoidal_avoid};
 pub use trochoid_air::lifted_cut;
 pub use trochoid_slot::{
     plan_trochoidal_slot, trochoidal_slot, TrochoidParams, TrochoidPlan, TrochoidReturn, DEFAULT_MAX_ENGAGEMENT,

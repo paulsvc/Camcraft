@@ -342,16 +342,17 @@ fn groove_and_part_post_to_the_lathe_golden() {
         bar_advance: 30.0,
         bar_unload: true,
         bar_transfer: false,
-        inspect_tol: 0.0,
+        inspect_tol: 0.0, kerf: Default::default(),
     };
     create(&world, &mut history, "G1", "GT-0200", groove);
     create(&world, &mut history, "P1", "GT-0300", part);
     let text = program_of(&world);
     assert!(text.contains("T0101") && text.contains("T0202"), "two stations: {text}");
     assert!(text.contains("(PART LOAD ADVANCE 30)") && text.contains("(PART UNLOAD)"), "{text}");
-    // #641: the parting plane Z-10 is the kerf's centre; the 3 mm blade
-    // posts its default left (-Z) corner, half a width below it.
-    assert!(text.contains("Z-11.5 ") && !text.contains("Z-10. "), "the kerf's left corner: {text}");
+    // #3452: the parting plane Z-10 is the part's end face, the 3 mm
+    // kerf stands below it (Z-13..-10, CL Z-11.5); #641: the blade
+    // posts its default left (-Z) corner, Z-13.
+    assert!(text.contains("Z-13. ") && !text.contains("Z-11.5 "), "the kerf's left corner: {text}");
     common::write_golden("nc/fanuc-lathe/groove_part.nc", &text);
 }
 

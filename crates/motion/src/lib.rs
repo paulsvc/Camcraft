@@ -24,6 +24,7 @@ extern crate self as camcraft_motion;
 
 pub mod stock_top_frame;
 pub mod approach;
+pub mod path_picks;
 pub mod drilling;
 pub mod break_through;
 pub mod entry;
@@ -39,6 +40,9 @@ pub mod machining2d;
 pub mod machining3d;
 pub mod plunge_law;
 pub mod plasma;
+// #1883: the 2D sheet kernel shared by plasma, wire EDM and waterjet.
+pub mod sheet;
+pub mod waterjet;
 pub mod wire_edm;
 pub mod probing;
 // #541: sinker EDM burn to depth.

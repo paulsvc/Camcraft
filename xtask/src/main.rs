@@ -43,6 +43,12 @@ mod heavy;
 mod heavy_covers;
 #[cfg(test)]
 mod heavy_covers_tests;
+<<<<<<< HEAD
+=======
+mod heavy_files;
+#[cfg(test)]
+mod heavy_files_tests;
+>>>>>>> upstream/main
 mod lanes;
 mod light;
 #[cfg(test)]

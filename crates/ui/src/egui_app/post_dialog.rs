@@ -61,7 +61,10 @@ impl PostDialogState {
             Some(s) => setup_post_options::of(&state.world, Some(s)),
             None => setup_post_options::document(&state.world),
         };
-        let target = crate::post_file::dialog_target(state);
+        let mut target = crate::post_file::dialog_target(state);
+        if posting::agie::is_native(&post) && !posting::agie::valid_name(&target.file_name) {
+            target.file_name = "WIREJOB".into();
+        }
         Self {
             tab: PostDialogTab::Settings,
             setup_target,
@@ -170,9 +173,7 @@ pub(crate) fn window(ctx: &egui::Context, state: &mut State) {
                     // #3384: the floating scroll bar lies over the right edge of
                     // the content. Keep a gutter, so that a right-aligned
                     // checkbox stays clickable when the options overflow.
-                    let s = ui.spacing().scroll;
-                    let gutter = s.bar_width + s.bar_inner_margin + s.bar_outer_margin;
-                    ui.set_max_width((ui.available_width() - gutter).max(0.0));
+                    super::layout::keep_scroll_gutter(ui, 0.0);
                     match dlg.tab {
                         PostDialogTab::Settings => {
                             draw_output_section(ui, &mut dlg);
@@ -271,6 +272,35 @@ fn queue_post_after_apply(
     edit: PostSettingsEdit,
 ) {
     let dir_trim = dlg.target_dir.trim();
+    if posting::agie::is_native(&dlg.post) {
+        if !posting::agie::valid_name(&dlg.file_name) {
+            dlg.error = Some("Enter a job name of up to eight uppercase letters or digits, starting with a letter".into());
+            state.post_dialog = Some(dlg);
+            return;
+        }
+        if dlg.options.per_op {
+            dlg.error = Some("Choose One program to create a native wire EDM job directory".into());
+            state.post_dialog = Some(dlg);
+            return;
+        }
+        let parent = if dir_trim.is_empty() {
+            crate::file_dialog::FileDialog::new().set_title("Choose a parent folder for the native wire EDM job").pick_folder()
+        } else {
+            Some(PathBuf::from(dir_trim))
+        };
+        if let Some(parent) = parent {
+            let path = parent.join(&dlg.file_name);
+            dlg.target_dir = parent.display().to_string();
+            state.pending.push_back(CommandKind::ApplyPostDialog {
+                edit,
+                post_path: Some(path),
+                per_op_dir: None,
+                program_prefix: None,
+            });
+        }
+        state.post_dialog = Some(dlg);
+        return;
+    }
     if dlg.options.per_op {
         let picked = if !dir_trim.is_empty() {
             Some(PathBuf::from(dir_trim))

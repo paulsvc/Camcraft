@@ -83,6 +83,7 @@ fn drill(x: f64, radius: f64, bottom: f64) -> OpParams {
 
 fn bore(x: f64, radius: f64) -> OpParams {
     OpParams::Bore {
+        pass_start: camcraft_app::machining2d::PassStart::Auto,
         break_through: None,
         links: camcraft_app::links::Links::PLANAR,
         clearance_z: Height::fixed(30.0),

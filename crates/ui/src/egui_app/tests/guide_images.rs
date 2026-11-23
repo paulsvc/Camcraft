@@ -383,7 +383,7 @@ fn pocket_variant(base: &OpParams, strategy: PocketStrategy, stepover: f64,
     let OpParams::Pocket { stock_to_leave, clearance_z, retract_z, top_z, bottom_z,
         stepdown, feed, plunge_feed, climb, optimal_load, blend_turns,
         blend_radius, tilt, rest, ref corner_relief, .. } = *base else { panic!("expected guide pocket"); };
-    OpParams::Pocket { stock_to_leave, clearance_z, retract_z, top_z, bottom_z,
+    OpParams::Pocket { pass_start: Default::default(), stock_to_leave, clearance_z, retract_z, top_z, bottom_z,
         stepdown, feed, plunge_feed, climb, optimal_load, blend_turns,
         blend_radius, tilt, rest, corner_relief: corner_relief.clone(), strategy, stepover, entry, helix_radius, links }
 }

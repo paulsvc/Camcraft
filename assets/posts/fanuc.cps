@@ -22,6 +22,7 @@ workOffsetIndex = true; // reads PARAM WorkOffset as the 1-based offset number (
 workOffsetMax = 6;      // G54..G59; G54.1 P extended offsets are an option not verified here (#931)
 millSpindleReverse = true; // reads PARAM MillSpindle (#988): M4 for a left-hand-cut mill; the engine refuses a reverse mill spindle for a post without it
 wcsRotation = true;        // #760: writes G68 X0. Y0. R / G69 in Control mode from PARAM WcsYaw & WcsRotationMode
+uprightReturn = true;      // #3477: uprightAfterTilt() retracts (G28 Z or G53 Z) and writes the rotaries to zero at each section after a tilted section (#3466); pinned by upright_after_tilt.rs
 programUnits = "mm inch"; // #902: writes the document's unit (postOptions.Units), G21 / G20
 endUnits = "G20 G21";     // #2189: switches end units before M30 when asked
 
@@ -46,7 +47,7 @@ declaredOptions = {
   writeToolList: { type: "boolean", title: "Write tool list", group: "Header & comments", description: "Emit a summary comment per tool at program start", default: false },
   writeVersion: { type: "boolean", title: "Write post version", group: "Header & comments", description: "Emit post version metadata comment in the header", default: false },
   // #2769: off by default - a control without Manual Guide i can alarm on G1902.
-  manualGuideBlank: { type: "boolean", title: "Manual Guide i blank (G1902 / G1900)", group: "Header & comments", description: "Write the setup's stock as a Manual Guide i blank block before the first operation - only for a control with Manual Guide i", default: false },
+  manualGuideBlank: { type: "boolean", title: "Manual Guide i blank (G1902 / G1900)", group: "Header & comments", description: "Write the setup's stock as a Manual Guide i blank block before the first operation - only for a control with Manual Guide i. Series 30i background simulation ignores G20/G21; confirm the control unit setting", default: false },
   optionalStop: { type: "boolean", title: "Optional stop (M1)", group: "Behavior", description: "Write M1 before tool changes after the first operation", default: false },
   safeRetract: {
     type: "enum",
@@ -60,6 +61,8 @@ declaredOptions = {
     default: "G28",
   },
   useRadiusArcs: { type: "boolean", title: "Use radius (R) arcs", group: "Cycles & arcs", description: "Write R word instead of I/J/K arc centers", default: false },
+  // #2603: off by default - a control with parameter 5200 bit 0 set taps rigid on G84 alone.
+  rigidTapM29: { type: "boolean", title: "Rigid tap M29 before G84", group: "Cycles & arcs", description: "Write M29 S<rpm> before each G84 cycle group - for a control that taps rigid only after M29", default: false },
   // #2603: per-operation AI contour control, as a 31i-A5 owner writes it.
   aiContourControl: { type: "boolean", title: "AI contour control (G05.1)", group: "Smoothing", description: "Write G05.1 Q1 R<level> at each operation start and G05.1 Q0 at its end - needs the control's AI contour control option", default: false },
   aiContourLevel: { type: "integer", title: "AI contour control level", group: "Smoothing", description: "The R word of G05.1 Q1 (machining condition level 1-10)", min: 1, max: 10, default: 5 },
@@ -246,6 +249,7 @@ function retractHome(xyToo) {
 }
 function xyz(p) { return [wo("X", p.X, orgX), wo("Y", p.Y, orgY), wo("Z", p.Z, orgZ)]; }
 function wo(letter, v, o) { return has(v) ? letter + fu(v - o) : ""; }  // axis word, origin-relative
+function arcWord(k, v) { return wo(k, v, k === "X" ? orgX : (k === "Y" ? orgY : orgZ)); }  // #3442: a position word as written, for arcFate
 function msg(s) {  // counted warning where the host offers message()
   if (typeof message === "function") message(s); else writeln("; " + s);
 }
@@ -729,6 +733,26 @@ function aiccOff() {
   smoothActive = false;
 }
 
+// #3466: a section that follows a tilted one starts upright. The angle
+// words are modal and a tilted section's exit keeps its lean, so a
+// section whose moves state no angle would cut under the old one. Each
+// rotary the control holds (rotAt) away from zero is commanded back to
+// zero - after G49 (the preamble's line), at the reference height, before
+// the tool change and the first X/Y traverse, which states its height again.
+function uprightAfterTilt() {
+  var words = [], held = [], ls = ["A", "B", "C"];
+  for (var i = 0; i < ls.length; i++) {
+    var v = rotAt[ls[i]];
+    if (has(v) && Math.abs(v) > 1e-9 && statesRotary(ls[i])) { words.push(angleWord(ls[i], 0)); held.push(ls[i]); }
+  }
+  if (!words.length) return;
+  retractHome(false);
+  if (optStr("safeRetract", "G28") !== "G53") block(["G90"]);
+  block(["G00"].concat(words));
+  for (var j = 0; j < held.length; j++) rotAt[held[j]] = 0;
+  xyUnknown = true;
+}
+
 function startPreamble() {
   if (sectionOpen) return;
   sectionOpen = true;
@@ -740,6 +764,7 @@ function startPreamble() {
   // #1649: the operator reads why every sign on a flipped axis is the other one.
   if (wcsFlip) note("WCS " + wcsFlip.split("").join(" AND ") + " FLIPPED - PROGRAM MIRRORED");
   block(["G90", wcsWord, "G40", "G49", "G80"]);
+  uprightAfterTilt();
   if (toolWait) {
     if (secStarted > 0 && optBool("optionalStop", false)) block(["M1"]);
     toolNote();
@@ -1055,6 +1080,9 @@ function emitArcWithRadius(p, g, tw, fwd) {
 function onCircular() {
   startPreamble();
   compRefuse("an arc");
+  // #3442: an arc whose written ends coincide is no arc block (arcFate, PRELUDE).
+  var fate = arcFate(arcWord, arcIncOf(fu));  // #3474: I J K are increments from the start
+  if (fate !== "arc") { if (fate === "linear") onLinear(); return; }
   var tw = tilt(properties);
   if (tw === null || chainCut()) return;
   if (spindleStopped("arc move " + (properties.CircularDirection === "CW" ? "G02" : "G03"))) return;
@@ -1174,6 +1202,10 @@ function onCycle() {
     return;
   }
   if (spindleStopped("canned cycle " + g)) return;
+  if (g === "G84" && optBool("rigidTapM29", false) && !(sRpm > 0)) {
+    msg("rigid tap M29 needs the section's spindle speed - G84 is refused, not posted without M29 S");
+    return;
+  }
   if (!xyFirst(p.X, p.Y, p.R, false)) return;  // #1633: refused - the move is not written
   cycleSeat(p);
   aiccOff();                 // #2603: no canned cycle under AI contour control
@@ -1186,6 +1218,9 @@ function onCycle() {
   } else {
     if (inCycle) block(["G80"]);
     block(["G99"]);            // #994: each hole returns to R
+    // #2603: rigid mode (M29 S, B-64604EN-2 rigid tapping) ends at G80, so
+    // each G84 group states it again, with no axis move before the G84.
+    if (g === "G84" && optBool("rigidTapM29", false)) block(["M29", "S" + ni(sRpm)]);
     // Q is an increment (peck depth), not a position: no origin shift.
     var words = [g, wo("X", p.X, orgX), wo("Y", p.Y, orgY), wo("Z", p.Z, orgZ), wo("R", p.R, orgZ)];
     if ((p.CycleType === "PECK" || p.CycleType === "DEEP") && has(p.Q) && p.Q > 0) {
