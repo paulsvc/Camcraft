@@ -102,6 +102,10 @@ Quick prints its selection before it runs:
   suite has the map: `Gate map (M4.4): covers app::x, app::y...`.
 - A change to shared test code (`tests/common`, goldens, snapshots) runs the
   suites of that crate.
+- A change in `assets/posts/`, `assets/machines/`, `examples/`,
+  `crates/post/src/` or `crates/motion/src/` runs the app suites that post
+  the shipped examples: `example_catalog*`, `first_part_programs` and the
+  others in `xtask/src/example_suites.rs` (#3521).
 - A change in geometry, cl or a `Cargo.toml` falls back to batch.
 - A change in `xtask/` runs the unit tests of xtask.
 - `camcraft-kernel` runs in quick only when kernel is touched.
