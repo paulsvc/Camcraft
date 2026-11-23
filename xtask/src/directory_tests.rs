@@ -10,6 +10,8 @@ use crate::{scan, single};
 
 #[path = "directory_edges_tests.rs"]
 mod edges;
+#[path = "directory_selection_tests.rs"]
+mod selection;
 
 struct Fixture(PathBuf);
 impl Fixture {
