@@ -69,12 +69,8 @@ pub fn code(line: &str, st: &mut Lex) -> String {
                     *st = Lex::Block(1);
                     i += 1;
                 }
-<<<<<<< HEAD
-                'r' if (i == 0 || !is_ident(c[i - 1]) || c[i - 1] == 'b')
-=======
                 // `r".."`, `br".."` and `cr".."` (C string, #3711) open a raw string.
                 'r' if (i == 0 || !is_ident(c[i - 1]) || c[i - 1] == 'b' || c[i - 1] == 'c')
->>>>>>> upstream/main
                     && c.get(i + 1 + c[i + 1..].iter().take_while(|&&x| x == '#').count())
                         == Some(&'"') =>
                 {

@@ -65,11 +65,7 @@ fn quick_checks_old_and_new_hunk_sides_without_widening_in_test_edits() {
             panic!("unexpected batch");
         };
         // An edit outside the test fns of a private submodule runs that submodule (#3706).
-<<<<<<< HEAD
-        let expected = if whole {
-=======
         let expected = if outside_fns {
->>>>>>> upstream/main
             "test -j 6 -p camcraft-app --no-fail-fast --test group -- --test-threads=6 cases::"
         } else {
             "test -j 6 -p camcraft-app --test group -- --test-threads=6 --exact cases::changed"

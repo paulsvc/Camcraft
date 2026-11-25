@@ -43,12 +43,9 @@ mod heavy;
 mod heavy_covers;
 #[cfg(test)]
 mod heavy_covers_tests;
-<<<<<<< HEAD
-=======
 mod heavy_files;
 #[cfg(test)]
 mod heavy_files_tests;
->>>>>>> upstream/main
 mod lanes;
 mod light;
 #[cfg(test)]
@@ -106,6 +103,9 @@ mod select;
 #[cfg(test)]
 mod select_tests;
 mod single;
+mod stale_base;
+#[cfg(test)]
+mod stale_base_tests;
 #[cfg(test)]
 mod step_tests;
 mod suites;
@@ -334,6 +334,7 @@ fn changed_since(root: &Path, base: &str) -> Result<(String, Vec<String>, Vec<St
         .ok()
         .filter(|s| !s.is_empty())
         .ok_or_else(|| format!("no merge base with '{base}'"))?;
+    stale_base::warnings(root, base).iter().for_each(|w| println!("{w}"));
     let lines = |s: String| -> Vec<String> {
         s.lines()
             .filter(|l| !l.is_empty())

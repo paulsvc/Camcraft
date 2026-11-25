@@ -3,15 +3,9 @@
 //! (AGENTS.md "Test the change, not everything"; when in doubt, the whole suite).
 //!
 //! A file `tests/<suite>/<sub>.rs` that changes outside its test fns runs `--test <suite> -- <sub>::`
-<<<<<<< HEAD
-//! when the file holds no item that other modules can use (`pub`, `pub(..)`, a macro). A change of
-//! `main.rs`, of a shared helper module, of a cfg-gated module, or of more than one submodule of a
-//! suite runs the whole suite.
-=======
 //! when the file holds no item that other modules can use (`pub`, `pub(..)`, a trait impl, a macro).
 //! A change of `main.rs`, of a shared helper module, of a cfg-gated module, or of more than one
 //! submodule of a suite runs the whole suite.
->>>>>>> upstream/main
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -28,9 +22,6 @@ pub(super) fn filter(source: Option<&Source>, before: Option<&str>) -> Result<Op
     if !s.precise || s.module.is_empty() {
         return Ok(None);
     }
-<<<<<<< HEAD
-    let shared = re(r"(?m)^\s*pub\b|macro_rules!|macro_export|macro_use")?;
-=======
     // `pub`, `pub(crate)`, `pub(super)`, `pub(in ..)`, also after attributes on the same line; a trait
     // impl (`impl Trait for Type`), which other modules see; a macro (#3711).
     let shared = re(concat!(
@@ -38,7 +29,6 @@ pub(super) fn filter(source: Option<&Source>, before: Option<&str>) -> Result<Op
         r"|^\s*(?:#\s*\[[^\]]*\]\s*)*(?:unsafe\s+)?impl\b[^{;]*\bfor\b",
         r"|macro_rules!|macro_export|macro_use",
     ))?;
->>>>>>> upstream/main
     let now = scan::read(&s.path);
     if now.is_empty() || shared.is_match(&now) || shared.is_match(before) {
         return Ok(None);

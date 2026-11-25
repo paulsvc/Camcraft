@@ -187,8 +187,6 @@ fn a_submodule_that_was_shared_at_the_base_runs_the_whole_suite() {
     let Ok(Quick::Plan(p)) = quick::plan(&f.0, &diff, false) else { panic!("quick plan") };
     assert_eq!(args(&p), [WHOLE_MANY]);
 }
-<<<<<<< HEAD
-=======
 
 /// The plan for an edit on line 1 of `alpha.rs` when it holds `text` (also at the merge base).
 fn alpha_plan(text: &str) -> Vec<String> {
@@ -235,4 +233,3 @@ fn a_submodule_step_runs_only_that_submodule_in_real_cargo() {
     assert!(stdout.contains("alpha::a1"), "{stdout}");
     assert!(stdout.contains("4 filtered out"), "the other submodules must not run: {stdout}");
 }
->>>>>>> upstream/main
