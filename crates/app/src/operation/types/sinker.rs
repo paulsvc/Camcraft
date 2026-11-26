@@ -8,6 +8,7 @@
 //! from the machine's condition (#531). No vendor material.
 
 use super::height::Height;
+use crate::path_picks::PathPicks;
 pub use crate::sinker::SinkerDatum;
 pub use crate::sinker_orbit::{Orbit as SinkerOrbit, OrbitKind as SinkerOrbitKind};
 pub use crate::sinker_undersize::SinkerPass;
@@ -58,6 +59,8 @@ pub struct SinkerBurnOp {
     /// machine lists and the radius within its stated maximum - both
     /// read at generation, refused by name.
     pub orbit: Option<SinkerOrbit>,
+    /// The operation's start and exit picks (#3339).
+    pub picks: PathPicks,
 }
 
 impl SinkerBurnOp {
@@ -77,6 +80,7 @@ impl SinkerBurnOp {
             && self.cavity_sane()
             && self.orbit.as_ref().is_none_or(|o| o.check().is_ok())
             && self.compensation_refusal().is_none()
+            && self.picks.refusal().is_none()
     }
 
     /// The layer step's and the measured wear's refusal, by name (#546) -
@@ -113,6 +117,16 @@ impl SinkerBurnOp {
             )),
             (Some(l), Some(o)) => crate::sinker_wear::rate_refusal(&format!("measured {l} over {o}"), l / o),
         }
+    }
+
+    /// The angles at which the orbit starts and ends under the start and
+    /// exit picks (#3333), read round the burn position.
+    ///
+    /// # Errors
+    /// `sinker_picks::orbit_ends`'s refusals, by name: a pick with no
+    /// orbit, a pick on the burn position, a pick a vector orbit cannot hold.
+    pub fn orbit_ends(&self) -> Result<crate::sinker_picks::OrbitEnds, String> {
+        crate::sinker_picks::orbit_ends((self.x, self.y), self.orbit.as_ref(), &self.picks)
     }
 
     /// The finished cavity's numbers: unread (any finite, non-negative
@@ -176,6 +190,15 @@ impl SinkerSideBurnOp {
     #[must_use]
     pub fn side(&self) -> SinkerSide {
         SinkerSide { direction: self.direction, amount: self.amount, undersize: self.undersize }
+    }
+
+    /// The ends at which the side move starts and ends under the start
+    /// and exit picks (#3333): the burn position or the wall end.
+    ///
+    /// # Errors
+    /// `sinker_picks::side_ends`'s refusals, by name.
+    pub fn side_ends(&self) -> Result<crate::sinker_picks::SideEnds, String> {
+        crate::sinker_picks::side_ends((self.burn.x, self.burn.y), &self.side(), &self.burn.picks)
     }
 
     /// The structural refusal by name (no world): an orbit, a measured

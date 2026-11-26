@@ -5,10 +5,11 @@
 use crate::cl::{MoveKind, PathBuilder, Toolpath};
 use crate::geo2d::{Point2, Region};
 use crate::geometry::Point3;
+use crate::path_picks::PathPicks;
 
-use super::blend::plan_reversals;
+use super::blend::{Turn, plan_reversals};
 use super::face_holes::{self, FaceHoles};
-use super::face_keep;
+use super::{face_keep, face_raster};
 pub use super::face_keep::FaceKeep;
 use super::levels::cut_levels_under;
 // The enum moved to its own module (#261 part 2); every
@@ -51,6 +52,12 @@ pub struct FaceParams {
     /// in the path's notes. `false` - every pre-M11.1 file - is the
     /// sharp serpentine, unchanged to the byte.
     pub blend_turns: bool,
+    /// The turn's arc radius (#1759), read only with `blend_turns`:
+    /// `None` is the semicircle of half the row spacing every earlier
+    /// file turns on. A smaller radius turns on two quarter arcs joined
+    /// by a straight step (`blend.rs`); a radius is held to
+    /// `corner_arc_radius`'s door.
+    pub blend_radius: Option<f64>,
     /// How a row meets a hole in the region (M13.11): lifted over at
     /// the clearance plane (the default), cut across when the hole is
     /// air, or ignored - the pre-M13.11 band serpentine. A region with
@@ -102,6 +109,9 @@ impl FaceParams {
         }
         if self.feed <= 0.0 || self.plunge_feed <= 0.0 {
             return Err(GenError::Invalid("feeds must be positive".into()));
+        }
+        if self.blend_turns {
+            super::fillet_tally::corner_arc_radius(self.blend_radius, self.tool_diameter).map_err(GenError::Invalid)?;
         }
         Ok(())
     }
@@ -157,14 +167,29 @@ pub fn face_over(
 /// [`face_over`] that keeps the whole tool clear of protected items
 /// (#3343): at each level the rows are cut short at the [`FaceKeep`]
 /// keep-out and the facer links over it at the clearance plane. A level
-/// with no row piece left is skipped; when no level is left the cut is
-/// refused by name. `None` is [`face_over`] to the byte.
+/// with no row piece left would leave the face above Cut Z, so the cut is
+/// refused by name with the depth reached (#3526). `None` is
+/// [`face_over`] to the byte.
 pub fn face_over_kept(
     region: &Region,
     p: &FaceParams,
     lead: f64,
     solid: Option<&Region>,
     keep: Option<&FaceKeep<'_>>,
+) -> Result<Toolpath, GenError> {
+    face_picked(region, p, lead, solid, keep, &PathPicks::default())
+}
+
+/// [`face_over_kept`] under the user's start and exit picks (#3326), in
+/// the region's frame: `face_raster` orders the same rows from the start
+/// corner and refuses an exit the row count cannot reach. No pick: unchanged.
+pub fn face_picked(
+    region: &Region,
+    p: &FaceParams,
+    lead: f64,
+    solid: Option<&Region>,
+    keep: Option<&FaceKeep<'_>>,
+    picks: &PathPicks,
 ) -> Result<Toolpath, GenError> {
     p.validate()?;
     if !(lead.is_finite() && lead >= 0.0) {
@@ -175,7 +200,7 @@ pub fn face_over_kept(
         None => return Err(GenError::Empty("empty footprint".into())),
     };
     let r = p.tool_diameter * 0.5;
-    let ys = band(lo.y, hi.y, r, p.stepover)?;
+    let mut ys = band(lo.y, hi.y, r, p.stepover)?;
     let (x_in, x_out) = (lo.x - r, hi.x + r);
     let zs = match (p.top_z, p.stepdown) {
         (Some(t), Some(s)) => cut_levels_under(t, p.stock_top, p.cut_z, s)?,
@@ -184,24 +209,16 @@ pub fn face_over_kept(
 
     // Rows are the same at every level, so the reversal plan is too:
     // decided once, its refusals stated once.
-    let (turns, blend_notes) = plan_reversals(&ys, r, p.blend_turns);
-
-    let start_x = if p.climb { x_in - lead } else { x_out + lead };
+    let (mut turns, blend_notes) = plan_reversals(&ys, r, p.blend_turns, p.blend_radius);
+    // #3326: the picks order the rows; the rows themselves never change.
+    let raster = face_raster::plan(picks, (lo, hi), ys.len(), p.climb, p.cut_z)?;
+    raster.order(&mut ys, &mut turns);
     // The rows' extents and their pieces around the bridged holes,
     // decided once like the reversals: a hole-free region keeps every
     // row whole, to the same numbers.
     let bridged = face_holes::forbidden(region, p.holes, solid, r)?;
     let (forbidden, hole_note) = (bridged.grown, bridged.note);
-    let rows: Vec<(f64, f64, f64)> = ys
-        .iter()
-        .enumerate()
-        .map(|(i, &y)| {
-            // Serpentine: even rows run the climb direction, odd rows return.
-            let forward = p.climb == (i % 2 == 0);
-            let (from, to) = if forward { (x_in, x_out) } else { (x_out, x_in) };
-            (y, if i == 0 { start_x } else { from }, to)
-        })
-        .collect();
+    let rows = raster.rows(&ys, x_in, x_out, lead);
     let pieces: Vec<Vec<(f64, f64)>> =
         rows.iter().map(|&(y, a, b)| face_holes::pieces(&forbidden, y, a, b)).collect();
     // Two bridged holes closer than the tool leave the strip between
@@ -222,14 +239,14 @@ pub fn face_over_kept(
         }
         unfaced = face_holes::uncut(region, &rows, &pieces, r)?;
     }
-    let entry = pieces.iter().flatten().next().map(|&(x, _)| x).unwrap_or(start_x);
+    let entry = pieces.iter().flatten().next().map(|&(x, _)| x).or(rows.first().map(|row| row.1)).unwrap_or(x_in);
 
     // The approach (#690): every mill op opens with a rapid to its start
     // on the clearance plane, so the post's first motion after the tool
     // call is a G00 there - never a feed from wherever the tool change
     // left the spindle. Facing starts the cursor where the others do.
     let mut b = PathBuilder::approached(Point3::new(0.0, 0.0, p.clearance_z));
-    for n in blend_notes {
+    for n in blend_notes.into_iter().chain(raster.note.clone()) {
         b.note(n);
     }
     if let Some(n) = hole_note {
@@ -247,6 +264,7 @@ pub fn face_over_kept(
         let Some(lv) = face_keep::level(keep, z, &rows, &pieces, (entry, ys[0]), &mut tally)? else {
             continue;
         };
+        raster.held(&lv.pieces, z)?; // #3326: the picks, on the cut rows
         let (ex, ey) = lv.start;
         if tally.levels > 1 {
             // New material is engaged from the air, never from under:
@@ -258,7 +276,7 @@ pub fn face_over_kept(
         b.push(MoveKind::Plunge, Point3::new(ex, ey, z), Some(p.plunge_feed));
         let pieces = lv.pieces.as_ref();
         for (i, y) in ys.iter().enumerate() {
-            let forward = p.climb == (i % 2 == 0);
+            let (forward, ccw) = (raster.forward(i), raster.ccw(i));
             let end_x = rows[i].2;
             for &(x0, x1) in &pieces[i] {
                 let at = b.at();
@@ -282,13 +300,27 @@ pub fn face_over_kept(
                     if let Some(&(x0, _)) = pieces[i + 1].first() {
                         link(&mut b, Point3::new(x0, y1, z), p);
                     }
-                } else if turns.get(i).copied().unwrap_or(false) {
+                } else if let Some(turn) = turns.get(i).copied().flatten() {
                     // Blended reversal: the step's own endpoints, one
                     // semicircle bulging away from the footprint - a
-                    // left (ccw) turn off a +X row, a right (cw) one
-                    // off -X.
-                    let center = Point2::new(end_x, (*y + y1) * 0.5);
-                    b.push_arc(MoveKind::Feed, to, Some(p.feed), center, forward);
+                    // left (ccw) turn off a +X row that steps up, a
+                    // right (cw) one off -X (`face_raster`).
+                    match turn {
+                        Turn::Semicircle => {
+                            let center = Point2::new(end_x, (*y + y1) * 0.5);
+                            b.push_arc(MoveKind::Feed, to, Some(p.feed), center, ccw);
+                        }
+                        // #1759: two quarter arcs of the radius asked
+                        // for, the straight step between them `rho`
+                        // farther out than the sharp step stood.
+                        Turn::Corners(rho) => {
+                            let out = end_x + if forward { rho } else { -rho };
+                            let (c0, c1) = (Point2::new(end_x, *y + raster.step(rho)), Point2::new(end_x, y1 - raster.step(rho)));
+                            b.push_arc(MoveKind::Feed, Point3::new(out, c0.y, z), Some(p.feed), c0, ccw);
+                            b.push(MoveKind::Feed, Point3::new(out, c1.y, z), Some(p.feed));
+                            b.push_arc(MoveKind::Feed, to, Some(p.feed), c1, ccw);
+                        }
+                    }
                 } else {
                     b.push(MoveKind::Feed, to, Some(p.feed));
                 }
